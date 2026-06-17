@@ -993,3 +993,199 @@ function remove_category_prefix($title) {
 }
 
 
+
+/**
+ * Render a stable single product gallery from a shortcode.
+ *
+ * The theme intentionally keeps one main image in the WooCommerce gallery wrapper
+ * and swaps its image data from thumbnails. This avoids the FlexSlider state where
+ * clicking a thumbnail can move the gallery to an empty slide.
+ */
+function technivo_product_gallery_shortcode() {
+	if ( ! function_exists( 'wc_get_product' ) ) {
+		return '';
+	}
+
+	global $product;
+
+	if ( ! $product instanceof WC_Product ) {
+		$product = wc_get_product( get_the_ID() );
+	}
+
+	if ( ! $product instanceof WC_Product ) {
+		return '';
+	}
+
+	$columns           = apply_filters( 'woocommerce_product_thumbnails_columns', 4 );
+	$post_thumbnail_id = absint( $product->get_image_id() );
+	$attachment_ids    = $post_thumbnail_id ? array_merge( array( $post_thumbnail_id ), $product->get_gallery_image_ids() ) : $product->get_gallery_image_ids();
+	$attachment_ids    = array_values( array_unique( array_filter( array_map( 'absint', $attachment_ids ) ) ) );
+	$main_image_id     = $attachment_ids ? $attachment_ids[0] : 0;
+	$wrapper_classes   = apply_filters(
+		'woocommerce_single_product_image_gallery_classes',
+		array(
+			'woocommerce-product-gallery',
+			'woocommerce-product-gallery--' . ( $main_image_id ? 'with-images' : 'without-images' ),
+			'woocommerce-product-gallery--columns-' . absint( $columns ),
+			'images',
+		)
+	);
+
+	ob_start();
+	?>
+	<div class="<?php echo esc_attr( implode( ' ', array_map( 'sanitize_html_class', $wrapper_classes ) ) ); ?> technivo-shortcode-product-gallery" data-columns="<?php echo esc_attr( $columns ); ?>" style="opacity: 1; transition: opacity .25s ease-in-out;">
+		<div class="woocommerce-product-gallery__wrapper">
+			<?php echo technivo_product_gallery_main_image_html( $main_image_id ); // phpcs:disable WordPress.XSS.EscapeOutput.OutputNotEscaped ?>
+		</div>
+
+		<?php
+		if ( function_exists( 'wntr_sale_percentage' ) ) {
+			wntr_sale_percentage();
+		}
+		?>
+
+		<?php if ( count( $attachment_ids ) > 1 ) : ?>
+			<ol class="flex-control-nav flex-control-thumbs technivo-product-gallery-thumbs" aria-label="<?php echo esc_attr__( 'Product gallery thumbnails', 'technivo' ); ?>">
+				<?php foreach ( $attachment_ids as $index => $attachment_id ) : ?>
+					<?php echo technivo_product_gallery_thumb_html( $attachment_id, 0 === $index ); // phpcs:disable WordPress.XSS.EscapeOutput.OutputNotEscaped ?>
+				<?php endforeach; ?>
+			</ol>
+		<?php endif; ?>
+	</div>
+	<?php
+
+	technivo_product_gallery_print_script_once();
+
+	return ob_get_clean();
+}
+add_shortcode( 'technivo_product_gallery', 'technivo_product_gallery_shortcode' );
+
+function technivo_product_gallery_main_image_html( $attachment_id ) {
+	if ( ! $attachment_id ) {
+		return sprintf(
+			'<div class="woocommerce-product-gallery__image--placeholder"><img src="%s" alt="%s" class="wp-post-image" /></div>',
+			esc_url( wc_placeholder_img_src( 'woocommerce_single' ) ),
+			esc_attr__( 'Awaiting product image', 'woocommerce' )
+		);
+	}
+
+	$full_src = wp_get_attachment_image_src( $attachment_id, 'full' );
+	$alt      = technivo_product_gallery_image_alt( $attachment_id );
+	$image    = wp_get_attachment_image(
+		$attachment_id,
+		'woocommerce_single',
+		false,
+		array(
+			'class'                   => 'wp-post-image',
+			'alt'                     => $alt,
+			'data-caption'            => wp_get_attachment_caption( $attachment_id ),
+			'data-src'                => $full_src ? $full_src[0] : '',
+			'data-large_image'        => $full_src ? $full_src[0] : '',
+			'data-large_image_width'  => $full_src ? $full_src[1] : '',
+			'data-large_image_height' => $full_src ? $full_src[2] : '',
+		)
+	);
+
+	return sprintf( '<div class="woocommerce-product-gallery__image"><a href="%s">%s</a></div>', esc_url( $full_src ? $full_src[0] : wp_get_attachment_url( $attachment_id ) ), $image );
+}
+
+function technivo_product_gallery_thumb_html( $attachment_id, $active = false ) {
+	$full_src   = wp_get_attachment_image_src( $attachment_id, 'full' );
+	$single_src = wp_get_attachment_image_src( $attachment_id, 'woocommerce_single' );
+	$thumb_src  = wp_get_attachment_image_src( $attachment_id, 'woocommerce_gallery_thumbnail' );
+
+	if ( ! $full_src || ! $single_src || ! $thumb_src ) {
+		return '';
+	}
+
+	$alt = technivo_product_gallery_image_alt( $attachment_id );
+
+	return sprintf(
+		'<li><button type="button" class="technivo-gallery-thumb-button" data-technivo-gallery-thumb data-full="%1$s" data-full-width="%2$d" data-full-height="%3$d" data-single="%4$s" data-srcset="%5$s" data-sizes="%6$s" data-alt="%7$s"><img src="%8$s" alt="%7$s" class="%9$s" /></button></li>',
+		esc_url( $full_src[0] ),
+		absint( $full_src[1] ),
+		absint( $full_src[2] ),
+		esc_url( $single_src[0] ),
+		esc_attr( wp_get_attachment_image_srcset( $attachment_id, 'woocommerce_single' ) ),
+		esc_attr( wp_get_attachment_image_sizes( $attachment_id, 'woocommerce_single' ) ),
+		esc_attr( $alt ),
+		esc_url( $thumb_src[0] ),
+		$active ? 'flex-active' : ''
+	);
+}
+
+function technivo_product_gallery_image_alt( $attachment_id ) {
+	$alt = trim( wp_strip_all_tags( get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) ) );
+
+	return '' !== $alt ? $alt : get_the_title( $attachment_id );
+}
+
+function technivo_product_gallery_print_script_once() {
+	static $printed = false;
+
+	if ( $printed ) {
+		return;
+	}
+
+	$printed = true;
+	?>
+	<style>
+	.technivo-gallery-thumb-button { background: transparent; border: 0; margin: 0; padding: 0; display: block; cursor: pointer; }
+	.technivo-gallery-thumb-button img { display: block; }
+	</style>
+	<script>
+	document.addEventListener('click', function(event) {
+		var thumb = event.target.closest('[data-technivo-gallery-thumb]');
+
+		if (!thumb) {
+			return;
+		}
+
+		var gallery = thumb.closest('.technivo-shortcode-product-gallery');
+		var mainImage = gallery ? gallery.querySelector('.woocommerce-product-gallery__wrapper .woocommerce-product-gallery__image img') : null;
+		var mainLink = gallery ? gallery.querySelector('.woocommerce-product-gallery__wrapper .woocommerce-product-gallery__image a') : null;
+		var singleSrc = thumb.getAttribute('data-single');
+		var fullSrc = thumb.getAttribute('data-full');
+
+		if (!gallery || !mainImage || !singleSrc || !fullSrc) {
+			return;
+		}
+
+		event.preventDefault();
+		event.stopPropagation();
+
+		mainImage.setAttribute('src', singleSrc);
+		mainImage.setAttribute('alt', thumb.getAttribute('data-alt') || '');
+		mainImage.setAttribute('data-src', fullSrc);
+		mainImage.setAttribute('data-large_image', fullSrc);
+		mainImage.setAttribute('data-large_image_width', thumb.getAttribute('data-full-width') || '');
+		mainImage.setAttribute('data-large_image_height', thumb.getAttribute('data-full-height') || '');
+
+		if (thumb.getAttribute('data-srcset')) {
+			mainImage.setAttribute('srcset', thumb.getAttribute('data-srcset'));
+		} else {
+			mainImage.removeAttribute('srcset');
+		}
+
+		if (thumb.getAttribute('data-sizes')) {
+			mainImage.setAttribute('sizes', thumb.getAttribute('data-sizes'));
+		} else {
+			mainImage.removeAttribute('sizes');
+		}
+
+		if (mainLink) {
+			mainLink.setAttribute('href', fullSrc);
+		}
+
+		gallery.querySelectorAll('[data-technivo-gallery-thumb] img').forEach(function(image) {
+			image.classList.remove('flex-active');
+		});
+
+		var activeImage = thumb.querySelector('img');
+		if (activeImage) {
+			activeImage.classList.add('flex-active');
+		}
+	}, true);
+	</script>
+	<?php
+}
