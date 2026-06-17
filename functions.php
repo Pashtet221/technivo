@@ -923,6 +923,20 @@ add_action( 'after_setup_theme', function() {
 	add_theme_support( 'wc-product-gallery-slider' );
 });
 
+/**
+ * Disable cyclic navigation in the single product image gallery.
+ *
+ * Some WooCommerce/FlexSlider versions can wrap from the last product image
+ * back to the first one. Keeping the gallery non-cyclic prevents thumbnail
+ * clicks and gallery arrows from jumping to duplicated loop slides.
+ */
+add_filter( 'woocommerce_single_product_carousel_options', function( $options ) {
+	$options['animationLoop'] = false;
+	$options['slideshow']     = false;
+
+	return $options;
+} );
+
 // Добавляем кнопки + и - к количеству товара
 add_action('woocommerce_before_quantity_input_field', 'custom_quantity_minus_button');
 function custom_quantity_minus_button() {
