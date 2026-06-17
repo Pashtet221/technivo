@@ -75,6 +75,13 @@ global $webi;
  wp_footer(); ?>
 
 
+<script>
+jQuery(function($){
+	$('.woocommerce-product-gallery').find('*').off();
+	$('.zoomContainer, .zoomWindowContainer').remove();
+});
+</script>
+
 <style>
 .woocommerce .single-product-full #content .product div.images {
         opacity: 1 !important;
