@@ -54,7 +54,25 @@ $wrapper_classes   = apply_filters(
 
 		echo apply_filters( 'woocommerce_single_product_image_thumbnail_html', $html, $post_thumbnail_id ); // phpcs:disable WordPress.XSS.EscapeOutput.OutputNotEscaped
 
+		// Keep non-slide markup (for example the theme sale badge) out of the FlexSlider
+		// wrapper. Extra nodes inside this wrapper can be treated as slides and produce
+		// an empty white frame when switching gallery thumbnails.
+		$technivo_has_sale_badge_callback = function_exists( 'wntr_sale_percentage' ) && has_action( 'woocommerce_product_thumbnails', 'wntr_sale_percentage' );
+
+		if ( $technivo_has_sale_badge_callback ) {
+			remove_action( 'woocommerce_product_thumbnails', 'wntr_sale_percentage', 10 );
+		}
+
 		do_action( 'woocommerce_product_thumbnails' );
+
+		if ( $technivo_has_sale_badge_callback ) {
+			add_action( 'woocommerce_product_thumbnails', 'wntr_sale_percentage', 10 );
+		}
 		?>
 	</div>
+	<?php
+	if ( $technivo_has_sale_badge_callback ) {
+		wntr_sale_percentage();
+	}
+	?>
 </div>
