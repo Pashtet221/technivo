@@ -975,21 +975,6 @@ add_filter('woocommerce_product_meta_start', function () {
     });
 });
 
-
-
-
-
-
-
-
-
-
-add_action('wp_enqueue_scripts', function() {
-
-    wp_dequeue_script('wc-single-product');
-
-}, 100);
-
 // Выводим Elementor-шаблон в одной строке с кнопкой
 add_action('woocommerce_after_add_to_cart_button', 'add_elementor_template_inline');
 
